@@ -1,0 +1,62 @@
+name: Sync Fork
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # This will run the workflow daily at midnight
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure user/bot
+        run: |
+          git switch samd21-m0-mini
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git config advice.detachedHead false
+
+      - name: Fetch Upstream
+        run: |
+          git remote add upstream https://github.com/adafruit/uf2-samdx1.git
+          git fetch upstream
+          git branch --list --remote
+          git switch --detach upstream/master
+          echo "Upstream/master is commit $(git rev-parse --short HEAD)"
+
+      - name: Rebase samd21-m0-mini onto Upstream
+        run: |
+          git switch samd21-m0-mini
+          git status
+          echo "On commit $(git rev-parse --short HEAD)"
+          echo "Rebasing samd21-m0-mini..."
+          git rebase upstream/master
+          echo "On commit $(git rev-parse --short HEAD)"
+
+      - name: Push Changes (samd21-m0-mini)
+        uses: ad-m/github-push-action@master
+        with:
+          force_with_lease: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: samd21-m0-mini
+
+      - name: Rebase master on upstream/master
+        run: |
+          git switch master
+          git status
+          echo "On commit $(git rev-parse --short HEAD)"
+          echo "Rebasing master..."
+          git rebase upstream/master
+          echo "On commit $(git rev-parse --short HEAD)"
+
+      - name: Push Changes (master)
+        uses: ad-m/github-push-action@master
+        with:
+          force_with_lease: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: master
